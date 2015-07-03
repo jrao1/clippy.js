@@ -30,13 +30,13 @@ clippy.Agent.prototype = {
      * @param {Number} x
      * @param {Number} y
      */
-    gestureAt:function (x, y) {
+    gestureAt:function (x, y, callback) {
         var d = this._getDirection(x, y);
         var gAnim = 'Gesture' + d;
         var lookAnim = 'Look' + d;
 
         var animation = this.hasAnimation(gAnim) ? gAnim : lookAnim;
-        return this.play(animation);
+        return this.play(animation, undefined, callback);
     },
 
     /***
@@ -68,7 +68,7 @@ clippy.Agent.prototype = {
         }, this);
     },
 
-    moveTo:function (x, y, duration) {
+    moveTo:function (x, y, duration, cb) {
         var dir = this._getDirection(x, y);
         var anim = 'Move' + dir;
         if (duration === undefined) duration = 1000;
@@ -78,19 +78,24 @@ clippy.Agent.prototype = {
             if (duration === 0) {
                 this._el.css({top:y, left:x});
                 this.reposition();
+                if (cb) cb();
                 complete();
                 return;
             }
 
             // no animations
             if (!this.hasAnimation(anim)) {
-                this._el.animate({top:y, left:x}, duration, complete);
+                this._el.animate({top:y, left:x}, duration, function() {
+                    if (cb) cb();
+                    complete();                    
+                });
                 return;
             }
 
             var callback = $.proxy(function (name, state) {
                 // when exited, complete
                 if (state === clippy.Animator.States.EXITED) {
+                    if (cb) cb();
                     complete();
                 }
                 // if waiting,
@@ -98,6 +103,7 @@ clippy.Agent.prototype = {
                     this._el.animate({top:y, left:x}, duration, $.proxy(function () {
                         // after we're done with the movement, do the exit animation
                         this._animator.exitAnimation();
+                        if (cb) cb();
                     }, this));
                 }
 
@@ -142,11 +148,12 @@ clippy.Agent.prototype = {
      *
      * @param {Boolean=} fast
      */
-    show:function (fast) {
+    show:function (fast, callback) {
         this._hidden = false;
         if (fast) {
             this._el.show();
             this.resume();
+            if (callback) callback();
             this._onQueueEmpty();
             return;
         }
@@ -158,16 +165,20 @@ clippy.Agent.prototype = {
         }
 
         this.resume();
-        return this.play('Show');
+        return this.play('Show', undefined, callback);
     },
 
     /***
      *
      * @param {String} text
      */
-    speak:function (text, hold) {
+    speak:function (text, hold, startCallback, completeCallback) {
         this._addToQueue(function (complete) {
-            this._balloon.speak(complete, text, hold);
+            if (startCallback) startCallback();
+            this._balloon.speak(function() {
+                if (completeCallback) completeCallback();
+                complete();
+            }, text, hold);
         }, this);
     },
 
